@@ -5,7 +5,8 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
+/** Matches `Calm.primary` — tab bar & navigation accents */
+const tintColorLight = '#0c2d5c';
 const tintColorDark = '#fff';
 
 export const Colors = {
