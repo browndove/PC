@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -22,14 +26,19 @@ import {
   useFonts,
 } from '@expo-google-fonts/montserrat';
 
+import { useIosToast } from '@/components/ios-style-toast';
 import { useSignUpDraft } from '@/context/sign-up-draft';
+import { useKeyboardAvoidingOffset } from '@/hooks/useKeyboardAvoidingOffset';
 import { Calm } from '@/theme/calm';
 import { useResponsive, useScaledStyles } from '@/hooks/useResponsive';
 
 export default function SignUpScreen() {
   const styles = useScaledStyles(baseStyles);
+  const keyboardVerticalOffset = useKeyboardAvoidingOffset();
+  const { height: windowHeight } = useWindowDimensions();
   const { isTablet, device } = useResponsive();
   const { profile, setProfile } = useSignUpDraft();
+  const { show: showToast } = useIosToast();
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
@@ -39,6 +48,9 @@ export default function SignUpScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (profile) {
@@ -100,118 +112,146 @@ export default function SignUpScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.root}>
-        <Animated.View
-          style={[
-            styles.phoneCard,
-            isTablet && {
-              alignSelf: 'center',
-              width: '100%',
-              maxWidth: device === 'tabletLg' ? 720 : 560,
-            },
-            { opacity: cardOpacity, transform: [{ translateY: cardY }] },
-          ]}>
-          <Pressable
-            onPress={() => {
-              setProfile(null);
-              router.replace('/login');
-            }}
-            hitSlop={12}>
-            <Text style={styles.back}>Back</Text>
-          </Pressable>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.root}>
+          <KeyboardAvoidingView
+            style={styles.flexFill}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={keyboardVerticalOffset}>
+            <ScrollView
+              style={styles.flexFill}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { minHeight: Math.max(windowHeight - 24, 560), paddingBottom: 40 },
+              ]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}>
+              <Animated.View
+                style={[
+                  styles.phoneCard,
+                  isTablet && {
+                    alignSelf: 'center',
+                    width: '100%',
+                    maxWidth: device === 'tabletLg' ? 720 : 560,
+                  },
+                  { opacity: cardOpacity, transform: [{ translateY: cardY }] },
+                ]}>
+                <Pressable
+                  onPress={() => {
+                    setProfile(null);
+                    router.replace('/login');
+                  }}
+                  hitSlop={12}>
+                  <Text style={styles.back}>Back</Text>
+                </Pressable>
 
-          <Animated.View
-            style={[styles.illustrationWrap, { transform: [{ translateY: artFloat }] }]}>
-            <Image
-              source={require('@/assets/images/search-engines-bro.svg')}
-              style={styles.illustration}
-              contentFit="contain"
-            />
-          </Animated.View>
+                <Animated.View
+                  style={[styles.illustrationWrap, { transform: [{ translateY: artFloat }] }]}>
+                  <Image
+                    source={require('@/assets/images/search-engines-bro.svg')}
+                    style={styles.illustration}
+                    contentFit="contain"
+                  />
+                </Animated.View>
 
-          <View style={styles.copyWrap}>
-            <Text style={styles.title}>Create an account</Text>
-            <Text style={styles.subtitle}>
-              Add your name and email, then you&apos;ll set a password on the next step.
-            </Text>
-          </View>
+                <View style={styles.copyWrap}>
+                  <Text style={styles.title}>Create an account</Text>
+                  <Text style={styles.subtitle}>
+                    Add your name and email, then you&apos;ll set a password on the next step.
+                  </Text>
+                </View>
 
-          <View style={styles.formWrap}>
-            <Text style={styles.fieldLabel}>First name</Text>
-            <TextInput
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="First name"
-              placeholderTextColor="#8ca0b3"
-              style={styles.input}
-              autoCapitalize="words"
-              autoCorrect
-            />
-            <Text style={styles.fieldLabel}>Last name</Text>
-            <TextInput
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Last name"
-              placeholderTextColor="#8ca0b3"
-              style={styles.input}
-              autoCapitalize="words"
-              autoCorrect
-            />
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Email"
-              placeholderTextColor="#8ca0b3"
-              style={styles.input}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+                <View style={styles.formWrap}>
+                  <Text style={styles.fieldLabel}>First name</Text>
+                  <TextInput
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    placeholder="First name"
+                    placeholderTextColor="#8ca0b3"
+                    style={styles.input}
+                    autoCapitalize="words"
+                    autoCorrect
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => lastNameRef.current?.focus()}
+                  />
+                  <Text style={styles.fieldLabel}>Last name</Text>
+                  <TextInput
+                    ref={lastNameRef}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    placeholder="Last name"
+                    placeholderTextColor="#8ca0b3"
+                    style={styles.input}
+                    autoCapitalize="words"
+                    autoCorrect
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => emailRef.current?.focus()}
+                  />
+                  <Text style={styles.fieldLabel}>Email</Text>
+                  <TextInput
+                    ref={emailRef}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email"
+                    placeholderTextColor="#8ca0b3"
+                    style={styles.input}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </View>
 
-          <Pressable
-            onPress={() => {
-              setProfile(null);
-              router.replace('/login');
-            }}
-            style={styles.switchRow}
-            hitSlop={8}>
-            <Text style={styles.switchText}>
-              Already have an account?{' '}
-              <Text style={styles.switchBold}>Sign in</Text>
-            </Text>
-          </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setProfile(null);
+                    router.replace('/login');
+                  }}
+                  style={styles.switchRow}
+                  hitSlop={8}>
+                  <Text style={styles.switchText}>
+                    Already have an account?{' '}
+                    <Text style={styles.switchBold}>Sign in</Text>
+                  </Text>
+                </Pressable>
 
-          <View style={styles.footerRow}>
-            <View style={styles.dots}>
-              <View style={[styles.dot, styles.dotActive]} />
-              <View style={styles.dot} />
-              <View style={styles.dot} />
-            </View>
+                <View style={styles.footerRow}>
+                  <View style={styles.dots}>
+                    <View style={[styles.dot, styles.dotActive]} />
+                    <View style={styles.dot} />
+                    <View style={styles.dot} />
+                  </View>
 
-            <Pressable
-              style={[styles.ctaButton, !canSubmit && styles.ctaButtonDisabled]}
-              disabled={!canSubmit}
-              onPress={() => {
-                setProfile({
-                  firstName: firstName.trim(),
-                  lastName: lastName.trim(),
-                  email: trimmedEmail,
-                });
-                router.push('/sign-up-password');
-              }}>
-              <Text style={styles.ctaText}>Continue</Text>
-              <Image
-                source={require('@/assets/images/arrow-btn.png')}
-                style={styles.arrowButtonImage}
-              />
-            </Pressable>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
+                  <Pressable
+                    style={[styles.ctaButton, !canSubmit && styles.ctaButtonDisabled]}
+                    disabled={!canSubmit}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setProfile({
+                        firstName: firstName.trim(),
+                        lastName: lastName.trim(),
+                        email: trimmedEmail,
+                      });
+                      showToast('Next: set your password', 'success');
+                      router.push('/sign-up-password');
+                    }}>
+                    <Text style={styles.ctaText}>Continue</Text>
+                    <Image
+                      source={require('@/assets/images/arrow-btn.png')}
+                      style={styles.arrowButtonImage}
+                    />
+                  </Pressable>
+                </View>
+              </Animated.View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
@@ -224,12 +264,16 @@ const baseStyles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+  },
+  flexFill: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 32,
   },
   phoneCard: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: '#ffffff',
     borderRadius: 0,
     paddingHorizontal: 20,
@@ -245,7 +289,8 @@ const baseStyles = StyleSheet.create({
     fontFamily: 'Montserrat_500Medium',
   },
   illustrationWrap: {
-    height: '38%',
+    height: 180,
+    maxHeight: 200,
     marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',

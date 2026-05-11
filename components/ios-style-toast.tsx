@@ -1,17 +1,34 @@
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const VISIBLE_MS = 2400;
+const VISIBLE_MS_ERROR = 2600;
+const VISIBLE_MS_SUCCESS = 2200;
+const VISIBLE_MS_INFO = 2200;
 
-/**
- * Bottom “pill” toast similar to iOS system feedback (blur + rounded capsule).
- */
-export function useIosStyleToast() {
+export type IosToastKind = 'success' | 'error' | 'info';
+
+type ToastApi = {
+  show: (message: string, kind?: IosToastKind) => void;
+};
+
+const ToastContext = createContext<ToastApi | null>(null);
+
+function useToastController(): ToastApi & { ToastOverlay: ReactNode } {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState<string | null>(null);
+  const [kind, setKind] = useState<IosToastKind>('error');
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(10)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,19 +40,33 @@ export function useIosStyleToast() {
   }, []);
 
   const show = useCallback(
-    (msg: string) => {
+    (msg: string, toastKind: IosToastKind = 'error') => {
       const trimmed = msg.trim();
       if (!trimmed) return;
 
       if (timerRef.current) clearTimeout(timerRef.current);
 
       if (Platform.OS === 'ios') {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        if (toastKind === 'success') {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else if (toastKind === 'error') {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } else {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
 
+      setKind(toastKind);
       setMessage(trimmed);
       opacity.setValue(0);
       translateY.setValue(10);
+
+      const visibleMs =
+        toastKind === 'success'
+          ? VISIBLE_MS_SUCCESS
+          : toastKind === 'info'
+            ? VISIBLE_MS_INFO
+            : VISIBLE_MS_ERROR;
 
       Animated.parallel([
         Animated.timing(opacity, {
@@ -66,7 +97,7 @@ export function useIosStyleToast() {
         ]).start(({ finished }) => {
           if (finished) setMessage(null);
         });
-      }, VISIBLE_MS);
+      }, visibleMs);
     },
     [opacity, translateY],
   );
@@ -92,14 +123,38 @@ export function useIosStyleToast() {
             </BlurView>
           </View>
         ) : (
-          <View style={styles.androidCapsule}>
+          <View
+            style={[
+              styles.androidCapsule,
+              kind === 'success' && styles.androidCapsuleSuccess,
+            ]}>
             <Text style={styles.text}>{message}</Text>
           </View>
         )}
       </Animated.View>
     );
 
-  return { show, ToastOverlay };
+  const api = useMemo(() => ({ show }), [show]);
+  return { ...api, ToastOverlay };
+}
+
+export function IosToastProvider({ children }: { children: ReactNode }) {
+  const { show, ToastOverlay } = useToastController();
+  const value = useMemo(() => ({ show }), [show]);
+  return (
+    <ToastContext.Provider value={value}>
+      {children}
+      {ToastOverlay}
+    </ToastContext.Provider>
+  );
+}
+
+export function useIosToast(): ToastApi {
+  const ctx = useContext(ToastContext);
+  if (!ctx) {
+    throw new Error('useIosToast must be used within IosToastProvider');
+  }
+  return ctx;
 }
 
 const styles = StyleSheet.create({
@@ -111,6 +166,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: 24,
+    zIndex: 9999,
+    elevation: 9999,
   },
   capsuleClip: {
     maxWidth: 340,
@@ -132,6 +189,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
+  },
+  androidCapsuleSuccess: {
+    backgroundColor: 'rgba(36, 60, 42, 0.94)',
   },
   text: {
     color: 'rgba(255, 255, 255, 0.96)',

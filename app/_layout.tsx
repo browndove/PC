@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { IosToastProvider } from '@/components/ios-style-toast';
 import { AuthSessionProvider } from '@/context/auth-session';
 import { SelectedRegionProvider } from '@/context/selected-region';
 import { SignUpDraftProvider } from '@/context/sign-up-draft';
@@ -47,14 +48,16 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AuthSessionProvider>
-        <SelectedRegionProvider>
-          <SignUpDraftProvider>
-            <RootStack />
-            <StatusBar style="auto" />
-          </SignUpDraftProvider>
-        </SelectedRegionProvider>
-      </AuthSessionProvider>
+      <IosToastProvider>
+        <AuthSessionProvider>
+          <SelectedRegionProvider>
+            <SignUpDraftProvider>
+              <RootStack />
+              <StatusBar style="auto" />
+            </SignUpDraftProvider>
+          </SelectedRegionProvider>
+        </AuthSessionProvider>
+      </IosToastProvider>
     </ThemeProvider>
   );
 }

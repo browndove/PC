@@ -27,8 +27,10 @@ import {
   useFonts,
 } from '@expo-google-fonts/montserrat';
 
+import { useIosToast } from '@/components/ios-style-toast';
 import { useAuthSession } from '@/context/auth-session';
 import { useSignUpDraft } from '@/context/sign-up-draft';
+import { useKeyboardAvoidingOffset } from '@/hooks/useKeyboardAvoidingOffset';
 import { apiSignup, getApiErrorMessage, isApiConfigured } from '@/lib/auth-api';
 import { Calm } from '@/theme/calm';
 import { useResponsive, useScaledStyles } from '@/hooks/useResponsive';
@@ -37,10 +39,12 @@ const MIN_PASSWORD_LEN = 8;
 
 export default function SignUpPasswordScreen() {
   const styles = useScaledStyles(baseStyles);
+  const keyboardVerticalOffset = useKeyboardAvoidingOffset();
   const { height: windowHeight } = useWindowDimensions();
   const { isTablet, device } = useResponsive();
   const { profile, setProfile } = useSignUpDraft();
   const { signIn } = useAuthSession();
+  const { show: showToast } = useIosToast();
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
@@ -50,7 +54,6 @@ export default function SignUpPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
 
   const confirmRef = useRef<TextInput>(null);
   const cardY = useRef(new Animated.Value(24)).current;
@@ -106,7 +109,6 @@ export default function SignUpPasswordScreen() {
     if (!canSubmit || !profile) return;
     if (isApiConfigured()) {
       setSubmitting(true);
-      setApiError(null);
       try {
         const { token } = await apiSignup({
           email: profile.email,
@@ -116,14 +118,16 @@ export default function SignUpPasswordScreen() {
         });
         await signIn(token);
         setProfile(null);
+        showToast('Account created', 'success');
         router.replace('/logo-intro');
       } catch (e) {
-        setApiError(getApiErrorMessage(e));
+        showToast(getApiErrorMessage(e), 'error');
       } finally {
         setSubmitting(false);
       }
     } else {
       setProfile(null);
+      showToast('Continuing without an account', 'info');
       router.replace('/logo-intro');
     }
   };
@@ -140,15 +144,16 @@ export default function SignUpPasswordScreen() {
           <KeyboardAvoidingView
             style={styles.flexFill}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
+            keyboardVerticalOffset={keyboardVerticalOffset}>
             <ScrollView
               style={styles.flexFill}
               contentContainerStyle={[
                 styles.scrollContent,
-                { minHeight: Math.max(windowHeight - 24, 560) },
+                { minHeight: Math.max(windowHeight - 24, 560), paddingBottom: 40 },
               ]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}>
               <Animated.View
                 style={[
@@ -220,7 +225,6 @@ export default function SignUpPasswordScreen() {
                       Use at least {MIN_PASSWORD_LEN} characters.
                     </Text>
                   ) : null}
-                  {apiError ? <Text style={styles.hintError}>{apiError}</Text> : null}
                 </View>
 
                 <Pressable

@@ -1,10 +1,35 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+type ExpoExtra = { apiUrl?: string };
+
 function apiBase(): string | null {
-  const raw = process.env.EXPO_PUBLIC_API_URL?.trim();
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim() ?? '';
+  const fromExtra = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.apiUrl?.trim() ?? '';
+  const raw = (fromEnv || fromExtra).replace(/\/$/, '');
   if (!raw) return null;
-  return raw.replace(/\/$/, '');
+  return raw;
+}
+
+async function fetchPostJson(base: string, path: string, body: unknown): Promise<Response> {
+  const url = `${base}${path}`;
+  const init: RequestInit = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body),
+  };
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const transient =
+      msg.includes('Network request failed') ||
+      msg.includes('Failed to fetch') ||
+      msg === 'Load failed';
+    if (!transient) throw e;
+    await new Promise((r) => setTimeout(r, 750));
+    return await fetch(url, init);
+  }
 }
 
 /** Physical phone (not simulator / not web). */
@@ -39,12 +64,11 @@ function mapNetworkFailure(err: unknown, base: string): string {
 
   if (!isNetFail) return raw || 'Request failed';
 
-  const lines = [
-    'Cannot reach the API.',
-    `Trying: ${base}`,
-    'Start the server (cd server && npm run dev), use the same Wi‑Fi as this device, and put your computer’s LAN IP in EXPO_PUBLIC_API_URL (not localhost on a real phone).',
-  ];
-  return lines.join(' ');
+  const isPublicHttps = /^https:\/\//i.test(base);
+  const hint = isPublicHttps
+    ? 'Check your connection, Vercel deployment status, and that EXPO_PUBLIC_API_URL has no typo.'
+    : 'Start the server (cd server && npm run dev), use the same Wi‑Fi as this device, and put your computer’s LAN IP in EXPO_PUBLIC_API_URL (not localhost on a real phone).';
+  return ['Cannot reach the API.', `Trying: ${base}`, hint].join(' ');
 }
 
 export function isApiConfigured(): boolean {
@@ -62,10 +86,9 @@ export async function apiLogin(email: string, password: string): Promise<{ token
 
   let res: Response;
   try {
-    res = await fetch(`${base}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+    res = await fetchPostJson(base, '/auth/login', {
+      email: email.trim().toLowerCase(),
+      password,
     });
   } catch (e) {
     throw new Error(mapNetworkFailure(e, base));
@@ -93,15 +116,11 @@ export async function apiSignup(input: {
 
   let res: Response;
   try {
-    res = await fetch(`${base}/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        email: input.email.trim().toLowerCase(),
-        password: input.password,
-        firstName: input.firstName.trim(),
-        lastName: input.lastName.trim(),
-      }),
+    res = await fetchPostJson(base, '/auth/signup', {
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
     });
   } catch (e) {
     throw new Error(mapNetworkFailure(e, base));

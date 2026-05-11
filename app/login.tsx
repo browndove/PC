@@ -27,21 +27,23 @@ import {
   useFonts,
 } from '@expo-google-fonts/montserrat';
 
-import { useIosStyleToast } from '@/components/ios-style-toast';
+import { useIosToast } from '@/components/ios-style-toast';
 import { useAuthSession } from '@/context/auth-session';
+import { useKeyboardAvoidingOffset } from '@/hooks/useKeyboardAvoidingOffset';
 import { useResponsive, useScaledStyles } from '@/hooks/useResponsive';
 import { apiLogin, isApiConfigured } from '@/lib/auth-api';
 import { Calm } from '@/theme/calm';
 
 export default function LoginScreen() {
   const styles = useScaledStyles(baseStyles);
+  const keyboardVerticalOffset = useKeyboardAvoidingOffset();
   const { height: windowHeight } = useWindowDimensions();
   const { isTablet, device } = useResponsive();
   const { token, isReady, signIn } = useAuthSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const { show: showToast, ToastOverlay } = useIosStyleToast();
+  const { show: showToast } = useIosToast();
   const [fontsLoaded] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
@@ -104,15 +106,16 @@ export default function LoginScreen() {
           <KeyboardAvoidingView
             style={styles.flexFill}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
+            keyboardVerticalOffset={keyboardVerticalOffset}>
             <ScrollView
               style={styles.flexFill}
               contentContainerStyle={[
                 styles.scrollContent,
-                { minHeight: Math.max(windowHeight - 24, 560) },
+                { minHeight: Math.max(windowHeight - 24, 560), paddingBottom: 40 },
               ]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              automaticallyAdjustKeyboardInsets
               showsVerticalScrollIndicator={false}>
               <Animated.View
                 style={[
@@ -198,12 +201,13 @@ export default function LoginScreen() {
                       if (submitting) return;
                       Keyboard.dismiss();
                       if (!email.trim() || !password) {
-                        showToast('Enter your email and password.');
+                        showToast('Enter your email and password.', 'error');
                         return;
                       }
                       if (!isApiConfigured()) {
                         showToast(
                           'Missing API URL: set EXPO_PUBLIC_API_URL in PC/.env (see .env.example). On a real phone use your Mac’s Wi‑Fi IP.',
+                          'error',
                         );
                         return;
                       }
@@ -211,9 +215,10 @@ export default function LoginScreen() {
                       try {
                         const { token: jwt } = await apiLogin(email, password);
                         await signIn(jwt);
+                        showToast('Signed in', 'success');
                         router.replace('/logo-intro');
                       } catch (e) {
-                        showToast(e instanceof Error ? e.message : 'Sign in failed');
+                        showToast(e instanceof Error ? e.message : 'Sign in failed', 'error');
                       } finally {
                         setSubmitting(false);
                       }
@@ -239,7 +244,6 @@ export default function LoginScreen() {
           </KeyboardAvoidingView>
         </View>
       </TouchableWithoutFeedback>
-      {ToastOverlay}
     </SafeAreaView>
   );
 }
